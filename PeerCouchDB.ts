@@ -11,6 +11,10 @@ import { createBinaryBlob, createTextBlob, isDocContentSame, unique } from "./li
 export class PeerCouchDB extends Peer {
     man: DirectFileManipulator;
     declare config: PeerCouchDBConf;
+    private watchdogTimer?: ReturnType<typeof setInterval>;
+    private lastEventAt = Date.now();
+    private static readonly WATCHDOG_INTERVAL = 5 * 60 * 1000;
+    private static readonly WATCHDOG_TIMEOUT = 30 * 60 * 1000;
     constructor(conf: PeerCouchDBConf, dispatcher: DispatchFun) {
         super(conf, dispatcher);
         this.man = new DirectFileManipulator(conf);
@@ -90,6 +94,27 @@ export class PeerCouchDB extends Peer {
             deleted: ret.deleted
         };
     }
+    private startWatchdog() {
+        this.stopWatchdog();
+        this.lastEventAt = Date.now();
+        this.watchdogTimer = setInterval(() => {
+            const silentMs = Date.now() - this.lastEventAt;
+            if (silentMs > PeerCouchDB.WATCHDOG_TIMEOUT) {
+                this.normalLog(
+                    `Watchdog: no events in ${Math.round(silentMs / 60000)}min, restarting listener`
+                );
+                this.stop().then(() => this.start());
+            }
+        }, PeerCouchDB.WATCHDOG_INTERVAL);
+    }
+
+    private stopWatchdog() {
+        if (this.watchdogTimer) {
+            clearInterval(this.watchdogTimer);
+            this.watchdogTimer = undefined;
+        }
+    }
+
     async start(): Promise<void> {
         const baseDir = this.toLocalPath("");
         await this.man.ready.promise;
@@ -151,6 +176,7 @@ export class PeerCouchDB extends Peer {
             this.normalLog(`Watch starting from ${this.man.since}`);
         }
         this.man.beginWatch(async (entry) => {
+            this.lastEventAt = Date.now();
             const d = entry.type == "plain" ? entry.data : new Uint8Array(decodeBinary(entry.data));
             let path = entry.path.substring(baseDir.length);
             if (path.startsWith("/")) {
@@ -169,6 +195,7 @@ export class PeerCouchDB extends Peer {
             if (entry.path.indexOf(":") !== -1) return false;
             return entry.path.startsWith(baseDir);
         });
+        this.startWatchdog();
     }
     async dispatch(path: string, data: FileData | false) {
         if (data === false) return;
@@ -185,6 +212,7 @@ export class PeerCouchDB extends Peer {
         }
     }
     async stop(): Promise<void> {
+        this.stopWatchdog();
         this.man.endWatch();
         return await Promise.resolve();
     }
