@@ -4,6 +4,11 @@ import { Hub } from "./Hub.ts";
 import { Config } from "./types.ts";
 import { parseArgs } from "jsr:@std/cli";
 
+globalThis.addEventListener("unhandledrejection", (e) => {
+    console.error(`[bridge] Unhandled promise rejection: ${e.reason}`);
+    e.preventDefault();
+});
+
 const KEY = "LSB_"
 defaultLoggerEnv.minLogLevel = LOG_LEVEL_DEBUG;
 const configFile = Deno.env.get(`${KEY}CONFIG`) || "./dat/config.json";
