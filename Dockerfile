@@ -7,7 +7,6 @@ VOLUME /app/data
 
 COPY . .
 
-RUN deno install -A
+RUN deno install --allow-import --allow-scripts
 
 CMD [ "deno", "task", "run" ]
-
