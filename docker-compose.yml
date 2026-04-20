@@ -1,8 +1,10 @@
-version: "2.1"
+#
+# Ansible managed
+#
 services:
   bridge:
     build: .
-    volumes:
-      - ./data:/app/data
-      - ./dat:/app/dat
     restart: unless-stopped
+    volumes:
+      - ./dat:/app/dat
+      - /home/openclaw/mind_vault:/app/data
